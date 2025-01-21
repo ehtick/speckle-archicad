@@ -82,6 +82,11 @@ namespace
 		}
 	}
 
+	std::string bool_to_string(bool b)
+	{
+		return b ? "True" : "False";
+	}
+
 	std::string GetSingleCollectionTypePropertyValue(const API_Guid& elemId, const API_PropertyDefinition& propertyDefinition)
 	{
 		API_Property  prop = {};
@@ -100,7 +105,7 @@ namespace
 			propertyValue = std::to_string(prop.value.singleVariant.variant.doubleValue);
 			break;
 		case API_PropertyBooleanValueType:
-			propertyValue = std::to_string(prop.value.singleVariant.variant.boolValue);
+			propertyValue = bool_to_string(prop.value.singleVariant.variant.boolValue);
 			break;
 
 		default:
@@ -135,7 +140,7 @@ namespace
 				propertyValues.push_back(std::to_string(variant.doubleValue));
 				break;
 			case API_PropertyBooleanValueType:
-				propertyValues.push_back(std::to_string(variant.boolValue));
+				propertyValues.push_back(bool_to_string(variant.boolValue));
 				break;
 
 			default:
@@ -172,7 +177,7 @@ namespace
 					propertyValue = std::to_string(variant.displayVariant.doubleValue);
 					break;
 				case API_PropertyBooleanValueType:
-					propertyValue = std::to_string(variant.displayVariant.boolValue);
+					propertyValue = bool_to_string(variant.displayVariant.boolValue);
 					break;
 
 				default:
@@ -214,7 +219,7 @@ namespace
 						propertyValues.push_back(std::to_string(variant.displayVariant.doubleValue));
 						break;
 					case API_PropertyBooleanValueType:
-						propertyValues.push_back(std::to_string(variant.displayVariant.boolValue));
+						propertyValues.push_back(bool_to_string(variant.displayVariant.boolValue));
 						break;
 
 					default:
@@ -332,7 +337,7 @@ nlohmann::json HostToSpeckleConverter::GetElementProperties(const std::string& e
 	nlohmann::json properties;
 
 	auto elemType = apiElem.header.type.typeID;
-	std::vector<API_ElemTypeID> systemTypes = { API_WallID, API_SlabID, API_BeamID, API_ColumnID, API_RoofID, API_ShellID, API_MorphID };
+	std::vector<API_ElemTypeID> systemTypes = { API_WallID, API_SlabID, API_BeamID, API_BeamSegmentID, API_ColumnID, API_ColumnSegmentID, API_RoofID, API_ShellID, API_MorphID };
 	bool isSystemType = std::find(systemTypes.begin(), systemTypes.end(), elemType) != systemTypes.end();
 
 	if (isSystemType) 
