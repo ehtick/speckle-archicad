@@ -10,7 +10,8 @@ ReceiveBridge::ReceiveBridge(IBrowserAdapter* browser)
     receiveBinding = std::make_unique<Binding>(
         "receiveBinding",
         std::vector<std::string>{ "Receive", "AfterGetObjects" },
-        browser
+        browser,
+        this
     );
 
     receiveBinding->RunMethodRequested += [this](const RunMethodEventArgs& args) { OnRunMethod(args); };
