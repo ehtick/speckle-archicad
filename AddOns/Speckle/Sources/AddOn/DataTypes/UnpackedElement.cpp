@@ -49,3 +49,13 @@ UnpackedElement::UnpackedElement(const std::vector<Mesh>& meshes, const std::map
         }
     }
 }
+
+void UnpackedElement::Scale(const double scale)
+{
+    for (auto& vertex : vertices)
+    {
+        vertex.x *= scale;
+        vertex.y *= scale;
+        vertex.z *= scale;
+    }
+}
