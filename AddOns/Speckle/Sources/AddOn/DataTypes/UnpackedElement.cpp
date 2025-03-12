@@ -1,6 +1,6 @@
 #include "UnpackedElement.h"
 
-UnpackedElement::UnpackedElement(const std::vector<Mesh>& meshes, const std::map<std::string, std::string>& materialMap)
+UnpackedElement::UnpackedElement(const std::vector<Mesh>& meshes, const std::map<std::string, std::string>& materialTable)
 {
     std::unordered_map<int, int> vertexMap;
 
@@ -39,10 +39,14 @@ UnpackedElement::UnpackedElement(const std::vector<Mesh>& meshes, const std::map
             edges.push_back({ prevIndex, firstIndex });
 
             std::string materialName = "";
-            auto it = materialMap.find(mesh.applicationId);
-            if (it != materialMap.end())
+            auto it = materialTable.find(mesh.applicationId);
+            if (it != materialTable.end())
             {
                 materialName = it->second;
+            }
+            else
+            {
+                materialName = "speckle_default_material";
             }
 
             faces.push_back({ vertexCount, newIndices, edges, materialName });
@@ -50,7 +54,7 @@ UnpackedElement::UnpackedElement(const std::vector<Mesh>& meshes, const std::map
     }
 }
 
-void UnpackedElement::Scale(const double scale)
+void UnpackedElement::ApplyScaling(const double scale)
 {
     for (auto& vertex : vertices)
     {

@@ -28,6 +28,6 @@ public:
     std::vector<Vertex> vertices;
     std::vector<Face> faces;
 
-    UnpackedElement(const std::vector<Mesh>& meshes, const std::map<std::string, std::string>& materialMap);
-    void Scale(const double scale);
+    UnpackedElement(const std::vector<Mesh>& meshes, const std::map<std::string, std::string>& materialTable);
+    void ApplyScaling(const double scale);
 };
