@@ -1,5 +1,5 @@
 #include "LibpartBuilder.h"
-//#include "APIHelper.hpp"
+#include "APIHelper.hpp"
 #include "Box3DData.h"
 #include <CheckError.h>
 #include <SpeckleConversionException.h>
@@ -58,10 +58,10 @@ static GSErrCode CreateSubFolder(const GS::UniString& name, IO::Location& locati
 	{
 		location.AppendToLocal(folderName);
 		{
-			//LibraryHelper helper(false);
+			LibraryHelper helper(false);
 			err = ACAPI_LibraryManagement_DeleteEmbeddedLibItem(&location, false, true);
 		}
-		//LibraryHelper helper(true);
+		LibraryHelper helper(true);
 		err = folder.CreateFolder(folderName);
 	}
 
@@ -263,6 +263,7 @@ void LibpartBuilder::CreateLibPart(const UnpackedElement& element)
 			UInt32 end = static_cast<UInt32>(edge.end + 1);
 
 			line = GS::String::SPrintf("EDGE %d, %d, -1, -1, %s\t!#%u%s", start, end, "hiddenBodyEdge", currentEdge++, GS::EOL);
+			//line = GS::String::SPrintf("EDGE %d, %d, -1, -1, %s\t!#%u%s", start, end, "visibleBodyEdge", currentEdge++, GS::EOL);
 			ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
 		}
 
@@ -395,10 +396,17 @@ void LibpartBuilder::CreateLibParts(const std::vector<UnpackedElement>& elements
 {
 	ACAPI_CallUndoableCommand("Creating received objects",
 		[&]() -> GSErrCode {
-			//LibraryHelper helper(false);
+			LibraryHelper helper(false);
 			
 			for (const auto& elem : elements)
 			{
+				// Hack for very large objects (SketchUp)
+				if (elem.faces.size() > 100000)
+				{
+					// this is not good
+					continue;
+				}
+
 				ReceiveConversionResult conversionResult{};
 
 				try
@@ -421,7 +429,7 @@ void LibpartBuilder::PlaceLibparts()
 {
 	ACAPI_CallUndoableCommand("Placing received objects",
 		[&]() -> GSErrCode {
-			//LibraryHelper helper(false);
+			LibraryHelper helper(false);
 			auto originalDB = GetCurrentDB();
 			SwitchToFloorPlanDB();
 

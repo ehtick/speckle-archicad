@@ -16,40 +16,46 @@ UnpackedElement::UnpackedElement(const std::vector<Mesh>& meshes, const std::map
         size_t i = 0;
         while (i < mesh.faces.size())
         {
-            int vertexCount = mesh.faces[i++];
+            int polySize = mesh.faces[i++];
+
+            if (polySize < 3)
+            {
+                polySize += 3;
+            }
+
             std::vector<int> newIndices;
             std::vector<Edge> edges;
 
-            int firstIndex = mesh.faces[i] + vertexOffset;
-            int prevIndex = firstIndex;
-
-            for (int j = 0; j < vertexCount; ++j)
+            for (int j = 0; j < polySize; ++j)
             {
                 int oldIndex = mesh.faces[i++];
-                int newIndex = oldIndex + vertexOffset;
-                newIndices.push_back(newIndex);
-
-                if (j > 0)
-                {
-                    edges.push_back({ prevIndex, newIndex });
-                }
-                prevIndex = newIndex;
+                newIndices.push_back(oldIndex + vertexOffset);
             }
 
-            edges.push_back({ prevIndex, firstIndex });
-
-            std::string materialName = "";
+            std::string materialName = "speckle_default_material";
             auto it = materialTable.find(mesh.applicationId);
             if (it != materialTable.end())
             {
                 materialName = it->second;
             }
+
+            if (polySize == 3)
+            {
+                // Directly add triangles
+                faces.push_back({ 3, {newIndices[0], newIndices[1], newIndices[2]},
+                                  { {newIndices[0], newIndices[1]}, {newIndices[1], newIndices[2]}, {newIndices[2], newIndices[0]} },
+                                  materialName });
+            }
             else
             {
-                materialName = "speckle_default_material";
+                // Fan triangulation for n-gons
+                for (int j = 1; j < polySize - 1; ++j)
+                {
+                    faces.push_back({ 3, {newIndices[0], newIndices[j], newIndices[j + 1]},
+                                      { {newIndices[0], newIndices[j]}, {newIndices[j], newIndices[j + 1]}, {newIndices[j + 1], newIndices[0]} },
+                                      materialName });
+                }
             }
-
-            faces.push_back({ vertexCount, newIndices, edges, materialName });
         }
     }
 }
