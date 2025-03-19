@@ -4,6 +4,7 @@
 #include <CheckError.h>
 #include <SpeckleConversionException.h>
 #include <iostream>
+#include <Connector.h>
 
 static API_DatabaseInfo GetCurrentDB(void)
 {
@@ -229,6 +230,14 @@ void LibpartBuilder::CreateLibPart(const UnpackedElement& element)
 
 	Box3D box = Box3D::CreateEmpty();
 
+	// cutplane
+	/*line = GS::String::SPrintf("addz 1.1%s", GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+	line = GS::String::SPrintf("cutplane%s", GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+	line = GS::String::SPrintf("del 1%s", GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());*/
+
 	// add vertices
 	UInt32 vertexCount = static_cast<UInt32>(element.vertices.size());
 	for (UInt32 vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
@@ -282,6 +291,10 @@ void LibpartBuilder::CreateLibPart(const UnpackedElement& element)
 
 	line = GS::String::SPrintf("BODY 4%s%s", GS::EOL, GS::EOL);
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+
+	// cutplane
+	/*line = GS::String::SPrintf("cutend%s", GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());*/
 
 	// add HotSpots
 	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s", (float)box.GetMinX(), (float)box.GetMinY(), (float)box.GetMinZ(), GS::EOL);
@@ -390,6 +403,7 @@ void LibpartBuilder::CreateLibPart(const UnpackedElement& element)
 	CHECK_ERROR(ACAPI_LibraryPart_Save(&libPart));
 	libpartIndices.push_back(libPart.index);
 	_elementCount++;
+	CONNECTOR.GetProcessWindow().SetProcessValue(_elementCount);
 }
 
 void LibpartBuilder::CreateLibParts(const std::vector<UnpackedElement>& elements)
@@ -433,11 +447,14 @@ void LibpartBuilder::PlaceLibparts()
 			auto originalDB = GetCurrentDB();
 			SwitchToFloorPlanDB();
 
+			int placed = 0;
 			for (const auto& idx : libpartIndices)
 			{
 				try
 				{
 					std::string elemId = PlaceLibpart(idx);
+					placed++;
+					CONNECTOR.GetProcessWindow().SetProcessValue(placed);
 					bakedObjectIds.push_back(elemId);
 				}
 				catch (const std::exception& ex)
