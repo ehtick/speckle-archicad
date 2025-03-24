@@ -119,6 +119,12 @@ std::string LibpartBuilder::PlaceLibpart(GS::Int32 libIndex)
 	element.object.xRatio = 1.0;
 	element.object.yRatio = 1.0;
 
+	API_StoryVisibility vis;
+	vis.showAllAbove = true;
+	vis.showAllBelow = true;
+	vis.showOnHome = true;
+	element.object.visibility = vis;
+
 	CHECK_ERROR(ACAPI_Element_Create(&element, &elementMemo));
 	ACAPI_DisposeElemMemoHdls(&elementMemo);
 
@@ -126,7 +132,7 @@ std::string LibpartBuilder::PlaceLibpart(GS::Int32 libIndex)
 	return elementId;
 }
 
-void LibpartBuilder::CreateLibPart(const UnpackedElement& element)
+void LibpartBuilder::CreateLibPart(const ArchicadElement& element)
 {
 	API_LibPart libPart{};
 	BNZeroMemory(&libPart, sizeof(API_LibPart));
@@ -228,91 +234,65 @@ void LibpartBuilder::CreateLibPart(const UnpackedElement& element)
 	line = GS::String::SPrintf("\tmap_xform[1][3], map_xform[2][3], map_xform[3][3], map_xform[4][3]%s%s", GS::EOL, GS::EOL);
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
 
-	Box3D box = Box3D::CreateEmpty();
-
-	// cutplane
-	/*line = GS::String::SPrintf("addz 1.1%s", GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("cutplane%s", GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("del 1%s", GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());*/
-
-	// add vertices
-	UInt32 vertexCount = static_cast<UInt32>(element.vertices.size());
-	for (UInt32 vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++)
+	// create bodies
+	for (const auto& mesh : element.archicadMeshes)
 	{
-		double x = element.vertices[vertexIndex].x;
-		double y = element.vertices[vertexIndex].y;
-		double z = element.vertices[vertexIndex].z;
-
-		line = GS::String::SPrintf("VERT %f, %f, %f\t!#%u%s", (float)x, (float)y, (float)z, vertexIndex + 1, GS::EOL);
-		ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-		box.Extend(Point3D(x, y, z));
-	}
-
-	line = GS::String::SPrintf("%s", GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-
-	// add faces
-	UInt32 currentEdge = 1;
-	UInt32 faceCount = static_cast<UInt32>(element.faces.size());
-	for (UInt32 faceIndex = 0; faceIndex < faceCount; faceIndex++)
-	{
-		Face face = element.faces[faceIndex];
-		GS::UniString matName = face.materialName.c_str();
-		line = GS::String::SPrintf("! Polygon #%u%s%sMATERIAL \"%s\"%s", faceIndex + 1, GS::EOL, GS::EOL, matName.ToCStr().Get(), GS::EOL);
-		ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-
-		UInt32 edgeCount = static_cast<UInt32>(face.vertexCount);
-		for (UInt32 edgeIndex = 0; edgeIndex < edgeCount; edgeIndex++)
+		// add vertices
+		UInt32 vertexIndex = 1;
+		for (const auto& v : mesh.vertices)
 		{
-			Edge edge = face.edges[edgeIndex];
-			UInt32 start = static_cast<UInt32>(edge.start + 1);
-			UInt32 end = static_cast<UInt32>(edge.end + 1);
-
-			line = GS::String::SPrintf("EDGE %d, %d, -1, -1, %s\t!#%u%s", start, end, "hiddenBodyEdge", currentEdge++, GS::EOL);
-			//line = GS::String::SPrintf("EDGE %d, %d, -1, -1, %s\t!#%u%s", start, end, "visibleBodyEdge", currentEdge++, GS::EOL);
+			line = GS::String::SPrintf("VERT %f, %f, %f\t!#%u%s", (float)v.x, (float)v.y, (float)v.z, vertexIndex++, GS::EOL);
 			ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
 		}
 
-		line = GS::String::SPrintf("PGON %u, 0, -1", edgeCount);
+		line = GS::String::SPrintf("%s", GS::EOL);
 		ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-		currentEdge -= edgeCount;
-		for (UInt32 i = 0; i < edgeCount; i++)
+
+		// add edges
+		UInt32 edgeIndex = 1;
+		for (const auto& e : mesh.edges)
 		{
-			line = GS::String::SPrintf(",%s%u", " ", currentEdge++);
+			UInt32 start = static_cast<UInt32>(e.start);
+			UInt32 end = static_cast<UInt32>(e.end);
+			UInt32 pgon1 = static_cast<UInt32>(e.poly1);
+			UInt32 pgon2 = static_cast<UInt32>(e.poly2);
+			GS::UniString edgeVisibility = e.visibilityType.c_str();
+			line = GS::String::SPrintf("EDGE %d, %d, %d, %d, %s\t!#%u%s", start, end, pgon1, pgon2, edgeVisibility.ToCStr().Get(), edgeIndex++, GS::EOL);
 			ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
 		}
 
-		line = GS::String::SPrintf("\t!#%u%s%s", faceIndex + 1, GS::EOL, GS::EOL);
+		// add polys
+		UInt32 polyIndex = 1;
+		for (const auto& p : mesh.polys)
+		{
+			GS::UniString matName = p.materialName.c_str();
+			line = GS::String::SPrintf("%s! Polygon #%u%sMATERIAL \"%s\"%s", GS::EOL, polyIndex, GS::EOL, matName.ToCStr().Get(), GS::EOL);
+			ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+
+			// TODO normals (VECT) look OK in GDL script, but using them breaks polygons, needs investigation
+			//line = GS::String::SPrintf("VECT %f, %f, %f%s", (float)p.normal.x, (float)p.normal.y, (float)p.normal.z, GS::EOL);
+			//ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+
+			UInt32 polySize = static_cast<UInt32>(p.size);
+			line = GS::String::SPrintf("PGON %u, 0, -1", polySize);
+			ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+
+			++polyIndex;
+
+			for (const auto& e : p.edges)
+			{
+				Int32 ei = static_cast<Int32>(e);
+				line = GS::String::SPrintf(",%s%d", " ", ei);
+				ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+			}
+
+			line = GS::String::SPrintf("%s", GS::EOL);
+			ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+		}
+
+		line = GS::String::SPrintf("BODY 4%s%s%s", GS::EOL, "BASE", GS::EOL);
 		ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
 	}
-
-	line = GS::String::SPrintf("BODY 4%s%s", GS::EOL, GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-
-	// cutplane
-	/*line = GS::String::SPrintf("cutend%s", GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());*/
-
-	// add HotSpots
-	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s", (float)box.GetMinX(), (float)box.GetMinY(), (float)box.GetMinZ(), GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s", (float)box.GetMinX(), (float)box.GetMinY(), (float)box.GetMaxZ(), GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s", (float)box.GetMinX(), (float)box.GetMaxY(), (float)box.GetMinZ(), GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s", (float)box.GetMinX(), (float)box.GetMaxY(), (float)box.GetMaxZ(), GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s", (float)box.GetMaxX(), (float)box.GetMinY(), (float)box.GetMinZ(), GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s", (float)box.GetMaxX(), (float)box.GetMinY(), (float)box.GetMaxZ(), GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s", (float)box.GetMaxX(), (float)box.GetMaxY(), (float)box.GetMinZ(), GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("HOTSPOT %f, %f, %f%s%s", (float)box.GetMaxX(), (float)box.GetMaxY(), (float)box.GetMaxZ(), GS::EOL, GS::EOL);
-	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
 
 	line = "DEL TOP";
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
@@ -325,17 +305,56 @@ void LibpartBuilder::CreateLibPart(const UnpackedElement& element)
 	ACAPI_LibraryPart_NewSection(&section);
 	line = GS::String::SPrintf("!%s", GS::EOL);
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("! 2D Script (Generated by Speckle Connector)%s", GS::EOL);
+
+	line = GS::String::SPrintf("cutPlaneHeight	= (GLOB_CSTORY_ELEV + GLOB_CUTPLANES_INFO[1]) - GLOB_HSTORY_ELEV%s", GS::EOL);
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("!%s", GS::EOL);
+	line = GS::String::SPrintf("cutHeight = 0.01%s", GS::EOL);
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("PEN gs_cont_pen%s", GS::EOL);
+	line = GS::String::SPrintf("iCutPlanes = 1%s", GS::EOL);
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("SET FILL gs_fill_type%s", GS::EOL);
+	line = GS::String::SPrintf("%sfor i = 1 to iCutPlanes%s", GS::EOL, GS::EOL);
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	line = GS::String::SPrintf("PROJECT2{2} 3, 270.0, 3+32, gs_back_pen, 0, 0, 0%s", GS::EOL);
+	line = GS::String::SPrintf("\tput cutPlaneHeight + (i-1) * cutHeight%s", GS::EOL);
 	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
-	ACAPI_LibraryPart_EndSection();
+	line = GS::String::SPrintf("next i%s", GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+	line = GS::String::SPrintf("%sfor i = 0 to iCutPlanes%s", GS::EOL, GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+
+	line = GS::String::SPrintf(
+		"\tput 1+32,\t\t\t! method%s"
+		"\t\t2,\t\t\t\t! parts%s"
+		"\t\t1,\t\t\t\t! cutFillIndex%s"
+		"\t\t1,\t\t\t\t! cutFillFgPen%s"
+		"\t\t1,\t\t\t\t! cutFillBgPen%s"
+		"\t\t0.0,\t\t\t! cutFillOrigoX%s"
+		"\t\t0.0,\t\t\t! cutFillOrigoY%s"
+		"\t\t0.0,\t\t\t! cutFillDirection%s"
+		"\t\t1,\t\t\t\t! cutLinePen%s"
+		"\t\t1,\t\t\t\t! cutLineType%s"
+		"\t\t1,\t\t\t\t! projectedFillIndex%s"
+		"\t\t1,\t\t\t\t! projectedFillFgPen%s"
+		"\t\t1,\t\t\t\t! projectedFillBgPen%s"
+		"\t\t0.0,\t\t\t! projectedFillOrigoX%s"
+		"\t\t0.0,\t\t\t! projectedFillOrigoY%s"
+		"\t\t0.0,\t\t\t! projectedFillDirection%s"
+		"\t\t1,\t\t\t\t! projectedLinePen%s"
+		"\t\t1\t\t\t\t! projectedLineType%s",
+		GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+
+	line = GS::String::SPrintf("next i%s", GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+
+	line = GS::String::SPrintf(
+		"%sproject2{4} 3, 270,%s"
+		"\t0,\t\t\t! useTransparency%s"
+		"\t0,\t\t\t! statusParts%s"
+		"\tiCutPlanes,\t! numCutplanes%s"
+		"\tget (nsp)%s",
+		GS::EOL, GS::EOL, GS::EOL, GS::EOL, GS::EOL);
+	ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+
 
 	// Parameter script section
 	BNZeroMemory(&section, sizeof(API_LibPartSection));
@@ -406,7 +425,7 @@ void LibpartBuilder::CreateLibPart(const UnpackedElement& element)
 	CONNECTOR.GetProcessWindow().SetProcessValue(_elementCount);
 }
 
-void LibpartBuilder::CreateLibParts(const std::vector<UnpackedElement>& elements)
+void LibpartBuilder::CreateLibParts(const std::vector<ArchicadElement>& elements)
 {
 	ACAPI_CallUndoableCommand("Creating received objects",
 		[&]() -> GSErrCode {
@@ -414,13 +433,6 @@ void LibpartBuilder::CreateLibParts(const std::vector<UnpackedElement>& elements
 			
 			for (const auto& elem : elements)
 			{
-				// Hack for very large objects (SketchUp)
-				if (elem.faces.size() > 100000)
-				{
-					// this is not good
-					continue;
-				}
-
 				ReceiveConversionResult conversionResult{};
 
 				try
