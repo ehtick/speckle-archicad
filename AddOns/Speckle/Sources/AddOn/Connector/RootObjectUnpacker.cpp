@@ -385,7 +385,7 @@ void RootObjectUnpacker::ProcessNode(const std::shared_ptr<Node>& child)
 
     Mesh mesh = meshes[meshId];
     auto hostAppUnits = CONNECTOR.GetHostToSpeckleConverter().GetWorkingUnits();
-    double scaling = Units::GetConversionFactor(mesh.units, hostAppUnits.workingLengthUnits);
+    double scaling = Units::GetConversionFactor(mesh.units, "m");
     mesh.ApplyTransform(transform.AsVector());
     mesh.ApplyScaling(scaling);
     // we don't support colorproxies in archicad for now
