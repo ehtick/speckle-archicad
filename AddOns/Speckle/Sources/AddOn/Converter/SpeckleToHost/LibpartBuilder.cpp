@@ -250,13 +250,13 @@ void LibpartBuilder::CreateLibPart(const ArchicadElement& element)
 
 		// add edges
 		UInt32 edgeIndex = 1;
-		for (const auto& e : mesh.edges)
+		for (const auto& edge : mesh.edges)
 		{
-			UInt32 start = static_cast<UInt32>(e.start);
-			UInt32 end = static_cast<UInt32>(e.end);
-			UInt32 pgon1 = static_cast<UInt32>(e.poly1);
-			UInt32 pgon2 = static_cast<UInt32>(e.poly2);
-			GS::UniString edgeVisibility = e.visibilityType.c_str();
+			UInt32 start = static_cast<UInt32>(edge.start);
+			UInt32 end = static_cast<UInt32>(edge.end);
+			UInt32 pgon1 = static_cast<UInt32>(edge.poly1);
+			UInt32 pgon2 = static_cast<UInt32>(edge.poly2);
+			GS::UniString edgeVisibility = edge.visibilityType.c_str();
 			line = GS::String::SPrintf("EDGE %d, %d, %d, %d, %s\t!#%u%s", start, end, pgon1, pgon2, edgeVisibility.ToCStr().Get(), edgeIndex++, GS::EOL);
 			ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
 		}
@@ -278,12 +278,15 @@ void LibpartBuilder::CreateLibPart(const ArchicadElement& element)
 			ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
 
 			++polyIndex;
-
-			for (const auto& e : p.edges)
+			UInt32 edgeIndex = 1;
+			for (const auto& edge : p.edges)
 			{
-				Int32 ei = static_cast<Int32>(e);
-				line = GS::String::SPrintf(",%s%d", " ", ei);
+				Int32 iEdge = static_cast<Int32>(edge);
+
+				// add a linebreak after 10 items to avoid lines longer than 256 chars in the GDL script
+				line = GS::String::SPrintf(",%s%d", (edgeIndex % 10 == 0) ? GS::EOL : " ", iEdge);
 				ACAPI_LibraryPart_WriteSection(line.GetLength(), line.ToCStr());
+				++edgeIndex;
 			}
 
 			line = GS::String::SPrintf("%s", GS::EOL);

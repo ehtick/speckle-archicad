@@ -75,6 +75,36 @@ static bool IsCoplanar(const std::vector<ArchicadVertex>& polyVertices)
 	return true;
 }
 
+static bool IsConvex(const std::vector<ArchicadVertex>& polyVertices)
+{
+	if (polyVertices.size() < 4) return true;
+
+	bool gotPositive = false, gotNegative = false;
+	for (size_t i = 0; i < polyVertices.size(); ++i)
+	{
+		ArchicadVertex a = polyVertices[i];
+		ArchicadVertex b = polyVertices[(i + 1) % polyVertices.size()];
+		ArchicadVertex c = polyVertices[(i + 2) % polyVertices.size()];
+
+		ArchicadVertex edge1 = Subtract(b, a);
+		ArchicadVertex edge2 = Subtract(c, b);
+		ArchicadVertex cross = CrossProduct(edge1, edge2);
+
+		double dot = DotProduct(cross, cross);
+		if (dot > 0)
+		{
+			if (DotProduct(cross, polyVertices[0]) > 0)
+				gotPositive = true;
+			else
+				gotNegative = true;
+		}
+
+		if (gotPositive && gotNegative)
+			return false;
+	}
+	return true;
+}
+
 void ArchicadMesh::CreateMesh(const Mesh& mesh)
 {
     int vertexIndex = 1;
@@ -157,7 +187,8 @@ void ArchicadMesh::CreateMesh(const Mesh& mesh)
 				}
 				polys.push_back({ polySize, polyEdges, mesh.materialName });
 			}
-			else
+			// do fan triangulation if the polygon is convex non coplanar
+			else if (IsConvex(actualPoly))
 			{
 				for (size_t j = 1; j < faceVertices.size() - 1; ++j)
 				{
@@ -196,7 +227,11 @@ void ArchicadMesh::CreateMesh(const Mesh& mesh)
 					}
 					polys.push_back({ 3, triEdges, mesh.materialName });
 				}
-			}	
+			}
+			else
+			{
+				// TODO add earclipping triangulation for non convex non coplanar polygons here
+			}
 		}
 	}
 }
