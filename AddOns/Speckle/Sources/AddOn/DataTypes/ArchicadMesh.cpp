@@ -231,6 +231,7 @@ void ArchicadMesh::CreateMesh(const Mesh& mesh)
 			else
 			{
 				// TODO add earclipping triangulation for non convex non coplanar polygons here
+				// CNX-1510
 			}
 		}
 	}
