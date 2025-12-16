@@ -1,9 +1,10 @@
 #pragma once
 
+#include "IBridge.h"
 #include "IBrowserAdapter.h"
 #include "Binding.h"
 
-class BaseBridge {
+class BaseBridge : public IBridge {
 public:
     BaseBridge(IBrowserAdapter* browser);
 
@@ -11,8 +12,6 @@ public:
 
 private:
     std::unique_ptr<Binding> baseBinding;
-
-    void OnRunMethod(const RunMethodEventArgs& args);
     void RunMethod(const RunMethodEventArgs& args);
 
     void AddModel(const RunMethodEventArgs& args);

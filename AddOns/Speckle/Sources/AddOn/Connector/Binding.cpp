@@ -1,9 +1,10 @@
 #include "Binding.h"
 #include "Base64GuidGenerator.h"
 #include "Debug.h"
+#include "ArchiCadApiException.h"
 
-Binding::Binding(const std::string& name, const std::vector<std::string>& methodNames, IBrowserAdapter* browserAdapter)
-    : _name(name), _methodNames(methodNames), _browserAdapter(browserAdapter)
+Binding::Binding(const std::string& name, const std::vector<std::string>& methodNames, IBrowserAdapter* browserAdapter, IBridge* bridge)
+    : _name(name), _methodNames(methodNames), _browserAdapter(browserAdapter), _bridge(bridge)
 {
 	_browserAdapter->RegisterBinding(this);
 }
@@ -39,6 +40,18 @@ void Binding::Send(const std::string& methodName, const nlohmann::json& data)
 void Binding::SendByBrowser(const std::string& sendMethodId, const nlohmann::json& data)
 {
 	Send("sendByBrowser", data);
+	ResponseReady(sendMethodId);
+}
+
+void Binding::SendBatchViaBrowser(const std::string& sendMethodId, const nlohmann::json& data)
+{
+	Send("sendBatchViaBrowser", data);
+	ResponseReady(sendMethodId);
+}
+
+void Binding::CreateVersionViaBrowser(const std::string& sendMethodId, const nlohmann::json& data)
+{
+	Send("createVersionViaBrowser", data);
 	ResponseReady(sendMethodId);
 }
 
@@ -89,4 +102,27 @@ void Binding::ClearResult(const std::string& methodId)
 void Binding::SetToastNotification(const ToastNotification& toast)
 {
 	Send("setGlobalNotification", toast);
+}
+
+void Binding::RunMethod(const RunMethodEventArgs& args)
+{
+	try
+	{
+		_bridge->RunMethod(args);
+	}
+	catch (const ArchiCadApiException& acex)
+	{
+		SetToastNotification(
+			ToastNotification{ ToastNotificationType::TOAST_DANGER , "Exception occured in the ArchiCAD API" , acex.what(), false });
+	}
+	catch (const std::exception& stdex)
+	{
+		SetToastNotification(
+			ToastNotification{ ToastNotificationType::TOAST_DANGER , "Exception occured" , stdex.what(), false });
+	}
+	catch (...)
+	{
+		SetToastNotification(
+			ToastNotification{ ToastNotificationType::TOAST_DANGER , "Unknown exception occured" , "", false });
+	}
 }

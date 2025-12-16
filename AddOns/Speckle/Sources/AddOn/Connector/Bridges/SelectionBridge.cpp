@@ -10,33 +10,9 @@ SelectionBridge::SelectionBridge(IBrowserAdapter* browser)
     selectionBinding = std::make_unique<Binding>(
         "selectionBinding",
         std::vector<std::string>{ "GetSelection" },
-        browser);
-
-    selectionBinding->RunMethodRequested += [this](const RunMethodEventArgs& args) { OnRunMethod(args); };
-}
-
-// POC duplicated code, move try catch logic to Binding
-void SelectionBridge::OnRunMethod(const RunMethodEventArgs& args)
-{
-    try
-    {
-        RunMethod(args);
-    }
-    catch (const ArchiCadApiException& acex)
-    {
-        selectionBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured in the ArchiCAD API" , acex.what(), false});
-    }
-    catch (const std::exception& stdex)
-    {
-        selectionBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured" , stdex.what(), false });
-    }
-    catch (...)
-    {
-        selectionBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Unknown exception occured" , "", false });
-    }
+        browser,
+        this
+    );
 }
 
 void SelectionBridge::RunMethod(const RunMethodEventArgs& args)

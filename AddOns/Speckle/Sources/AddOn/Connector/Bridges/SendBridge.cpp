@@ -6,40 +6,20 @@
 #include "RootObjectBuilder.h"
 #include "InvalidMethodNameException.h"
 #include "ArchiCadApiException.h"
+#include "BaseObjectSerializer.h"
+#include "AfterSendObjectsArgs.h"
+#include "UserCancelledException.h"
+#include "SendSetting.h"
 
 
 SendBridge::SendBridge(IBrowserAdapter* browser)
 {
     sendBinding = std::make_unique<Binding>(
         "sendBinding",
-        std::vector<std::string>{ "GetSendFilters", "GetSendSettings", "Send" },
-        browser);
-
-    sendBinding->RunMethodRequested += [this](const RunMethodEventArgs& args) { OnRunMethod(args); };
-}
-
-// POC duplicated code, move try catch logic to Binding
-void SendBridge::OnRunMethod(const RunMethodEventArgs& args)
-{
-    try
-    {
-        RunMethod(args);
-    }
-    catch (const ArchiCadApiException& acex)
-    {
-        sendBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured in the ArchiCAD API" , acex.what(), false });
-    }
-    catch (const std::exception& stdex)
-    {
-        sendBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured" , stdex.what(), false });
-    }
-    catch (...)
-    {
-        sendBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Unknown exception occured" , "", false });
-    }
+        std::vector<std::string>{ "GetSendFilters", "GetSendSettings", "Send", "AfterSendObjects" },
+        browser,
+        this
+    );
 }
 
 void SendBridge::RunMethod(const RunMethodEventArgs& args)
@@ -56,6 +36,10 @@ void SendBridge::RunMethod(const RunMethodEventArgs& args)
     {
         Send(args);
     }
+    else if (args.methodName == "afterSendObjects")
+    {
+        AfterSendObjects(args);
+    }
     else
     {
         throw InvalidMethodNameException(args.methodName);
@@ -64,30 +48,71 @@ void SendBridge::RunMethod(const RunMethodEventArgs& args)
 
 void SendBridge::GetSendFilters(const RunMethodEventArgs& args)
 {
-    SendFilter filter;
-    filter.typeDiscriminator = "ArchicadSelectionFilter";
-    filter.name = "Selection";
-    filter.selectedObjectIds = CONNECTOR.GetHostToSpeckleConverter().GetSelection();
-    filter.summary = std::to_string(filter.selectedObjectIds.size()) + " objects selected";
+    ArchicadSelectionFilter selectionFilter;
+    selectionFilter.selectedObjectIds = CONNECTOR.GetHostToSpeckleConverter().GetSelection();
+    selectionFilter.summary = std::to_string(selectionFilter.selectedObjectIds.size()) + " objects selected";
 
-    nlohmann::json sendFilters;
-    sendFilters.push_back(filter);
-    args.eventSource->SetResult(args.methodId, sendFilters);
+    ArchicadElementTypeFilter elementTypeFilter;
+    for (const auto& typeName : CONNECTOR.GetHostToSpeckleConverter().GetElementTypeList())
+    {
+        elementTypeFilter.availableCategories.push_back({ typeName, typeName });
+    }
+
+    ArchicadLayerFilter layerFilter;
+    for (const auto& layer : CONNECTOR.GetHostToSpeckleConverter().GetLayers())
+    {
+        layerFilter.availableCategories.push_back({ layer.name, layer.id });
+    }
+
+    // CNX-2007 
+    // ACAPI_Navigator_SearchNavigatorItem API function crashes Archicad with specific files
+    // temp remove view filters until we find a workaround or an API fix is released
+    /*ArchicadViewsFilter viewsFilter;
+    for (const auto& navigatorView : CONNECTOR.GetHostToSpeckleConverter().GetNavigatorViews())
+    {
+        viewsFilter.availableViews.push_back(navigatorView.name);
+    }*/
+
+    auto filters = nlohmann::json::array({ selectionFilter, elementTypeFilter, layerFilter });
+    args.eventSource->SetResult(args.methodId, filters);
 }
 
 void SendBridge::GetSendSettings(const RunMethodEventArgs& args)
 {
-    // TODO implement
-    args.eventSource->SetResult(args.methodId, nlohmann::json::array());
+    SendSetting sendPropertiesSetting{ 
+        "sendProperties" , 
+        "Include Object Properties (disable for better performance)",
+        "boolean", 
+        true 
+    };
+    args.eventSource->SetResult(args.methodId, { sendPropertiesSetting });
+}
+
+static bool GetSendPropertiesSetting(const SenderModelCard& modelCard)
+{
+    bool sendProperties = true;
+
+    for (const auto& setting : modelCard.settings)
+    {
+        if (setting.id == "sendProperties")
+        {
+            sendProperties = setting.value.get<bool>();
+            break;
+        }
+    }
+
+    return sendProperties;
 }
 
 void SendBridge::Send(const RunMethodEventArgs& args)
 {
     if (args.data.size() < 1)
-        throw std::invalid_argument("Too few of arguments when calling " + args.methodName);
+        throw std::invalid_argument("Too few arguments when calling " + args.methodName);
 
-    std::string id = args.data[0].get<std::string>();
-    SendModelCard modelCard = CONNECTOR.GetModelCardDatabase().GetModelCard(id);
+    std::string modelCardId = args.data[0].get<std::string>();
+    SenderModelCard modelCard = CONNECTOR.GetModelCardDatabase().GetModelCard(modelCardId).AsSenderModelCard();
+    
+    CONNECTOR.GetProcessWindow().Init("Sending...", 1);
 
     SendViaBrowserArgs sendArgs{};
     sendArgs.modelCardId = modelCard.modelCardId;
@@ -96,16 +121,73 @@ void SendBridge::Send(const RunMethodEventArgs& args)
     sendArgs.serverUrl = modelCard.serverUrl;
     sendArgs.accountId = modelCard.accountId;
     sendArgs.token = CONNECTOR.GetAccountDatabase().GetTokenByAccountId(modelCard.accountId);
-    // TODO: message
-    sendArgs.message = "Sending model from ArchiCAD";
+    
+    CONNECTOR.GetSpeckleToHostConverter().ShowIn3D();   
+    auto layerStatesStart = CONNECTOR.GetHostToSpeckleConverter().GetLayers();
+    
+    try
+    {
+        nlohmann::json sendObj;
+        RootObjectBuilder rootObjectBuilder{};
+        bool includeProperties = GetSendPropertiesSetting(modelCard);
+        auto root = rootObjectBuilder.GetRootObject(modelCard.sendFilter.GetSelectedObjectIds(), conversionResultCache, includeProperties);
+        BaseObjectSerializer serializer{};
+        auto rootObjectId = serializer.Serialize(root);
+        auto batches = serializer.BatchObjects(10);
 
-    CONNECTOR.GetSpeckleToHostConverter().ShowAllIn3D();
-    nlohmann::json sendObj;
-    RootObjectBuilder rootObjectBuilder{};
-    std::vector<SendConversionResult> conversionResults;
-    sendObj["rootObject"] = rootObjectBuilder.GetRootObject(modelCard.sendFilter.selectedObjectIds, conversionResults);
-    sendArgs.sendObject = sendObj;
-    sendArgs.sendConversionResults = conversionResults;
+        sendArgs.referencedObjectId = rootObjectId;
 
-    args.eventSource->SendByBrowser(args.methodId, sendArgs);
+        int i = 1;
+        int batchSize = static_cast<int>(batches.size());
+        for (const auto& b : batches)
+        {
+            sendArgs.batch = b;
+            sendArgs.currentBatch = i;
+            i++;
+            sendArgs.totalBatch = batchSize;
+            args.eventSource->SendBatchViaBrowser(args.methodId, sendArgs);
+        }
+    }
+    catch (const UserCancelledException&)
+    {
+        args.eventSource->Send("triggerCancel", sendArgs.modelCardId);
+    }
+
+    // restore hidden layers after send (in case user sent with LayerFilter)
+    auto layerStatesEnd = CONNECTOR.GetHostToSpeckleConverter().GetLayers();
+    std::vector<int> layersToHide;
+    for (int i = 0; i < layerStatesStart.size(); i++)
+    {
+        if (layerStatesStart[i].hidden && !layerStatesEnd[i].hidden)
+        {
+            layersToHide.push_back(std::stoi(layerStatesStart[i].id));
+        }
+    }
+    CONNECTOR.GetSpeckleToHostConverter().SetLayerVisibility(layersToHide, false);
+
+    CONNECTOR.GetProcessWindow().Close();
+}
+
+void SendBridge::AfterSendObjects(const RunMethodEventArgs& args)
+{
+    if (args.data.size() < 2)
+        throw std::invalid_argument("Too few arguments when calling " + args.methodName);
+
+    std::string modelCardId = args.data[0].get<std::string>();
+    SenderModelCard modelCard = CONNECTOR.GetModelCardDatabase().GetModelCard(modelCardId).AsSenderModelCard();
+
+    AfterSendObjectsArgs afterSendObjectsArgs{};
+    afterSendObjectsArgs.modelCardId = modelCard.modelCardId;
+    afterSendObjectsArgs.projectId = modelCard.projectId;
+    afterSendObjectsArgs.modelId = modelCard.modelId;
+    afterSendObjectsArgs.serverUrl = modelCard.serverUrl;
+    afterSendObjectsArgs.accountId = modelCard.accountId;
+    afterSendObjectsArgs.token = CONNECTOR.GetAccountDatabase().GetTokenByAccountId(modelCard.accountId);
+    std::string referencedObjectId = args.data[1].get<std::string>();
+    afterSendObjectsArgs.referencedObjectId = referencedObjectId;
+    afterSendObjectsArgs.sendConversionResults = nlohmann::json::array();
+    afterSendObjectsArgs.sendConversionResults = conversionResultCache;
+
+    args.eventSource->CreateVersionViaBrowser(args.methodId, afterSendObjectsArgs);
+    conversionResultCache.clear();
 }

@@ -1,12 +1,13 @@
 #include "Connector.h"
 #include "AccountDatabase.h"
+#include "SqliteJsonObjectDatabase.h"
 #include "ModelCardDatabase.h"
 #include "HostToSpeckleConverter.h"
 #include "SpeckleToHostConverter.h"
 #include "ArchiCadDataStorage.h"
+#include "ProcessWindow.h"
 
 std::unique_ptr<Connector> Connector::instance = nullptr;
-const std::string Connector::MODELCARD_ADDONOBJECT_NAME = "SpeckleModelCardAddOnObjectName_v123";
 
 Connector& Connector::GetInstance()
 {
@@ -19,11 +20,13 @@ Connector& Connector::GetInstance()
 void Connector::InitConnector()
 {
 	accountDatabase = std::make_unique<AccountDatabase>();
-	modelCardDatabase = std::make_unique<ModelCardDatabase>();
+    jsonObjectDatabase = std::make_unique<SqliteJsonObjectDatabase>();
+	auto dataStorage = std::make_unique<ArchiCadDataStorage>();
+	modelCardDatabase = std::make_unique<ModelCardDatabase>(std::move(dataStorage));
 	hostToSpeckleConverter = std::make_unique<HostToSpeckleConverter>();
 	speckleToHostConverter = std::make_unique<SpeckleToHostConverter>();
 	hostAppEvents = std::make_unique<HostAppEvents>();
-	dataStorage = std::make_unique<ArchiCadDataStorage>();
+    processWindow = std::make_unique<ProcessWindow>();
 }
 
 IAccountDatabase& Connector::GetAccountDatabase() 
@@ -32,6 +35,14 @@ IAccountDatabase& Connector::GetAccountDatabase()
         throw std::runtime_error("AccountDatabase not initialized");
     
     return *accountDatabase;
+}
+
+IJsonObjectDatabase& Connector::GetJsonObjectDatabase()
+{
+    if (!jsonObjectDatabase)
+        throw std::runtime_error("JsonObjectDatabase not initialized");
+
+    return *jsonObjectDatabase;
 }
 
 IModelCardDatabase& Connector::GetModelCardDatabase() 
@@ -66,10 +77,10 @@ HostAppEvents& Connector::GetHostAppEvents()
     return *hostAppEvents;
 }
 
-IDataStorage& Connector::GetDataStorage() 
+IProcessWindow& Connector::GetProcessWindow()
 {
-    if (!dataStorage)
-        throw std::runtime_error("DataStorage not initialized");
+    if (!processWindow)
+        throw std::runtime_error("ProcessWindow not initialized");
 
-    return *dataStorage;
+    return *processWindow;
 }

@@ -1,20 +1,12 @@
 #pragma once
 
 #include "json.hpp"
+#include "EConversionResultStatus.h"
 #include "ConversionError.h"
-
-enum class ConversionResultStatus
-{
-    NONE = 0, // Do not use
-    SUCCESS = 1,
-    INFO = 2, // Not in use yet, maybe later as discussed
-    WARNING = 3, // Not in use yet, maybe later as discussed
-    ERROR = 4
-};
 
 struct SendConversionResult
 {
-    ConversionResultStatus status = ConversionResultStatus::SUCCESS;
+    ConversionResultStatus status = ConversionResultStatus::CONVERSION_SUCCESS;
     std::string sourceId = "";
     std::string sourceType = "";
     std::string resultId = "";

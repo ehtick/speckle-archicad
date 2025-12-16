@@ -1,9 +1,10 @@
 #pragma once
 
+#include "IBridge.h"
 #include "IBrowserAdapter.h"
 #include "Binding.h"
 
-class TestBridge {
+class TestBridge : public IBridge {
 public:
     TestBridge(IBrowserAdapter* browser);
 
@@ -11,8 +12,6 @@ public:
 
 private:
     std::unique_ptr<Binding> testBinding;
-
-    void OnRunMethod(const RunMethodEventArgs& args);
     void RunMethod(const RunMethodEventArgs& args);
 
     void GetComplexType(const RunMethodEventArgs& args);

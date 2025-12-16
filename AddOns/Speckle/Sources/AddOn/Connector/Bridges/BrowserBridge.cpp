@@ -19,12 +19,16 @@ void BrowserBridge::InitBrowserBridge(IBrowserAdapter* browserAdapter)
 	configBridge = std::make_unique<ConfigBridge>(browserAdapter);
 	selectionBridge = std::make_unique<SelectionBridge>(browserAdapter);
 	sendBridge = std::make_unique<SendBridge>(browserAdapter);
+	receiveBridge = std::make_unique<ReceiveBridge>(browserAdapter);
 	testBridge = std::make_unique<TestBridge>(browserAdapter);	
 }
 
 void BrowserBridge::LoadUI()
 {
-	_browserAdapter->LoadURL("https://boisterous-douhua-e3cefb.netlify.app/");
+    if (_browserAdapter == nullptr)
+        return;
+
+	_browserAdapter->LoadURL("https://dui.speckle.systems/");
 }
 
 AccountBridge& BrowserBridge::GetAccountBridge()
@@ -65,6 +69,14 @@ SendBridge& BrowserBridge::GetSendBridge()
         throw std::runtime_error("SendBridge not initialized");
 
     return *sendBridge;
+}
+
+ReceiveBridge& BrowserBridge::GetReceiveBridge()
+{
+    if (!receiveBridge)
+        throw std::runtime_error("ReceiveBridge not initialized");
+
+    return *receiveBridge;
 }
 
 TestBridge& BrowserBridge::GetTestBridge()

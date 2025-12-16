@@ -1,19 +1,20 @@
 #include "ModelCardDatabase.h"
 
+const static std::string MODELCARD_ADDONOBJECT_NAME = "SpeckleModelCardAddOnObjectName_v1";
+
+ModelCardDatabase::ModelCardDatabase(std::unique_ptr<IDataStorage> storage)
+    : dataStorage(std::move(storage)) {}
+
 
 void ModelCardDatabase::LoadModelsFromJson(const nlohmann::json j)
 {
     ClearModels();
 
-    if (!j.empty() && j.contains("models"))
-    {
-        for (const auto& model : j["models"])
-            AddModel(nlohmann::json(model));
-    }
-    else
-    {
-        // TODO throw?
-    }
+    if (j.empty() || !j.contains("models"))
+        return;
+
+    for (const ModelCard& modelCard : j["models"])
+        modelCards[modelCard.modelCardId] = modelCard;
 }
 
 nlohmann::json ModelCardDatabase::GetModelsAsJson()
@@ -23,16 +24,33 @@ nlohmann::json ModelCardDatabase::GetModelsAsJson()
     return j;
 }
 
-std::vector<SendModelCard> ModelCardDatabase::GetModels() const
+void ModelCardDatabase::StoreModels()
 {
-    std::vector<SendModelCard> cards;
+    if (!dataStorage)
+        throw std::runtime_error("DataStorage not initialized");
+
+    dataStorage->SaveData(GetModelsAsJson(), MODELCARD_ADDONOBJECT_NAME);
+}
+
+void ModelCardDatabase::LoadModelsFromStorage()
+{
+    if (!dataStorage)
+        throw std::runtime_error("DataStorage not initialized");
+
+    auto data = dataStorage->LoadData(MODELCARD_ADDONOBJECT_NAME);
+    LoadModelsFromJson(data);
+}
+
+std::vector<ModelCard> ModelCardDatabase::GetModels() const
+{
+    std::vector<ModelCard> cards;
     for (const auto& [id, card] : modelCards)
         cards.push_back(card);
 
     return cards;
 }
 
-SendModelCard ModelCardDatabase::GetModelCard(const std::string& modelCardId) const
+ModelCard ModelCardDatabase::GetModelCard(const std::string& modelCardId) const
 {
     try
     {
@@ -45,19 +63,22 @@ SendModelCard ModelCardDatabase::GetModelCard(const std::string& modelCardId) co
     }
 }
 
-void ModelCardDatabase::AddModel(const SendModelCard& modelCard)
+void ModelCardDatabase::AddModel(const ModelCard& modelCard)
 {
     modelCards[modelCard.modelCardId] = modelCard;
+    StoreModels();
 }
 
-void ModelCardDatabase::UpdateModel(const SendModelCard& modelCard)
+void ModelCardDatabase::UpdateModel(const ModelCard& modelCard)
 {
     modelCards[modelCard.modelCardId] = modelCard;
+    StoreModels();
 }
 
 void ModelCardDatabase::RemoveModel(const std::string& modelCardId)
 {
     modelCards.erase(modelCardId);
+    StoreModels();
 }
 
 void ModelCardDatabase::ClearModels()

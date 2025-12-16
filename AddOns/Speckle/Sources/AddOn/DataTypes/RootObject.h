@@ -4,13 +4,18 @@
 #include <map>
 #include "Level.h"
 #include "RenderMaterialProxy.h"
+#include "LevelProxy.h"
 
 struct RootObject
 {
     std::string speckle_type = "Speckle.Core.Models.Collections.Collection";
     std::string name = "";
+    std::string units = "m";
+    int version = 3;
     std::map<std::string, Level> elements;
     std::vector<RenderMaterialProxy> renderMaterialProxies;
+    std::vector<LevelProxy> levelProxies;
 };
 
 void to_json(nlohmann::json& j, const RootObject& rootObject);
+void from_json(const nlohmann::json& j, RootObject& rootObject);

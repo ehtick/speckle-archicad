@@ -1,9 +1,10 @@
 #pragma once
 
+#include "IBridge.h"
 #include "IBrowserAdapter.h"
 #include "Binding.h"
 
-class SelectionBridge {
+class SelectionBridge : public IBridge {
 public:
     SelectionBridge(IBrowserAdapter* browser);
 
@@ -11,8 +12,6 @@ public:
 
 private:
     std::unique_ptr<Binding> selectionBinding;
-
-    void OnRunMethod(const RunMethodEventArgs& args);
     void RunMethod(const RunMethodEventArgs& args);
 
     void GetSelection(const RunMethodEventArgs& args);

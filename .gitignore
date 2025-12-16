@@ -1,4 +1,9 @@
 **/build
+**/build_26
+**/build_27_ext
+**/build_27
+**/build_28
+**/build_29
 **/node_modules
 **/.vs
 **/.idea
@@ -11,3 +16,8 @@
 *.bak
 *.log
 **/*_svg_source/
+
+**/obj
+**/bin
+**/Thumbs.db
+**/output

@@ -1,9 +1,11 @@
 #pragma once
 
+#include "IBridge.h"
 #include "IBrowserAdapter.h"
 #include "Binding.h"
+#include "SendConversionResult.h"
 
-class SendBridge {
+class SendBridge : public IBridge {
 public:
     SendBridge(IBrowserAdapter* browser);
 
@@ -11,11 +13,11 @@ public:
 
 private:
     std::unique_ptr<Binding> sendBinding;
-
-    void OnRunMethod(const RunMethodEventArgs& args);
+    std::vector<SendConversionResult> conversionResultCache;
     void RunMethod(const RunMethodEventArgs& args);
 
     void GetSendFilters(const RunMethodEventArgs& args);
     void GetSendSettings(const RunMethodEventArgs& args);
     void Send(const RunMethodEventArgs& args);
+    void AfterSendObjects(const RunMethodEventArgs& args);
 };

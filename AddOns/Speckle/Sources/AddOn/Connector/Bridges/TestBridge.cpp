@@ -9,33 +9,9 @@ TestBridge::TestBridge(IBrowserAdapter* browser)
     testBinding = std::make_unique<Binding>(
         "testBinding",
         std::vector<std::string>{ "GetComplexType", "GoAway", "SayHi", "TriggerEvent" },
-        browser);
-
-    testBinding->RunMethodRequested += [this](const RunMethodEventArgs& args) { OnRunMethod(args); };
-}
-
-// POC duplicated code, move try catch logic to Binding
-void TestBridge::OnRunMethod(const RunMethodEventArgs& args)
-{
-    try
-    {
-        RunMethod(args);
-    }
-    catch (const ArchiCadApiException& acex)
-    {
-        testBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured in the ArchiCAD API" , acex.what(), false });
-    }
-    catch (const std::exception& stdex)
-    {
-        testBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured" , stdex.what(), false });
-    }
-    catch (...)
-    {
-        testBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Unknown exception occured" , "", false });
-    }
+        browser,
+        this
+    );
 }
 
 void TestBridge::RunMethod(const RunMethodEventArgs& args)

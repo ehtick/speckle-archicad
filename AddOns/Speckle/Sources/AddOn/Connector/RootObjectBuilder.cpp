@@ -1,68 +1,101 @@
 #include "RootObjectBuilder.h"
 #include "Connector.h"
 #include "ArchiCadApiException.h"
+#include "SpeckleConversionException.h"
+#include "UserCancelledException.h"
 
 
-RootObject RootObjectBuilder::GetRootObject(const std::vector<std::string>& elementIds, std::vector<SendConversionResult>& conversionResults)
+RootObject RootObjectBuilder::GetRootObject(const std::vector<std::string>& elementIds, std::vector<SendConversionResult>& conversionResults, bool includeProperties)
 {	
     RootObject rootObject;
     std::vector<ElementBody> bodies;
+    std::map<std::string, LevelProxy> levelProxies;
 
+
+    CONNECTOR.GetProcessWindow().Init("Converting elements", static_cast<int>(elementIds.size()));
+    int elemCount = 0;
     for (const auto& elemId : elementIds)
     {
+        elemCount++;
+        CONNECTOR.GetProcessWindow().SetProcessValue(elemCount);
         SendConversionResult conversionResult{};   
-
-        ElementBody body{};
-        std::string levelName;
-        std::string elementType;
 
         try
         {
-            conversionResult.sourceId = elemId;
-            elementType = CONNECTOR.GetHostToSpeckleConverter().GetElementType(elemId);
-            conversionResult.sourceType = elementType;
-            body = CONNECTOR.GetHostToSpeckleConverter().GetElementBody(elemId);
-            conversionResult.resultType = "Mesh";
-            conversionResult.resultId = "";
-            levelName = CONNECTOR.GetHostToSpeckleConverter().GetElementLevel(elemId);
+            auto archicadObject = CONNECTOR.GetHostToSpeckleConverter().GetArchicadObject(elemId, conversionResult, includeProperties);
+            
+            if (archicadObject.displayValue.meshes.empty())
+            {
+                for (const auto& subElement : archicadObject.elements)
+                {
+                    bodies.push_back(subElement.displayValue);
+                }
+            }
+            else
+            {
+                bodies.push_back(archicadObject.displayValue);
+            }
+
+            if (rootObject.elements.find(archicadObject.level) == rootObject.elements.end())
+            {
+                Level level{};
+                level.name = archicadObject.level;
+                rootObject.elements[archicadObject.level] = level;
+            }
+
+            Level& level = rootObject.elements[archicadObject.level];
+            if (level.elements.find(archicadObject.type) == level.elements.end())
+            {
+                ElementTypeCollection collection{};
+                collection.name = archicadObject.type;
+                level.elements[archicadObject.type] = collection;
+            }
+
+            ElementTypeCollection& elementTypeCollection = level.elements[archicadObject.type];
+            elementTypeCollection.elements.push_back(archicadObject);
+
+            if (levelProxies.find(archicadObject.level) == levelProxies.end())
+            {
+                ArchicadLevel archicadLevel;
+                archicadLevel.name = archicadObject.level;
+                archicadLevel.elevation = archicadObject.levelInfo.elevation;
+                LevelProxy levelProxy;
+                levelProxy.value = archicadLevel;
+                levelProxy.objects.push_back(archicadObject.applicationId);
+                levelProxies[archicadObject.level] = levelProxy;
+            }
+            else
+            {
+                levelProxies[archicadObject.level].objects.push_back(archicadObject.applicationId);
+            }
         }
-        catch (const ArchiCadApiException& e)
+        catch (const ArchiCadApiException& ae)
         {
-            conversionResult.status = ConversionResultStatus::ERROR;
-            conversionResult.error.message = e.what();
+            conversionResult.status = ConversionResultStatus::CONVERSION_ERROR;
+            conversionResult.error.message = ae.what();
         }
-
-        bodies.push_back(body);
-        ModelElement modelElement;
-        modelElement.displayValue = body;
-
-        if (rootObject.elements.find(levelName) == rootObject.elements.end())
+        catch (const SpeckleConversionException& se)
         {
-            Level level{};
-            level.name = levelName;
-            rootObject.elements[levelName] = level;
+            conversionResult.status = ConversionResultStatus::CONVERSION_ERROR;
+            conversionResult.error.message = se.what();
         }
-
-        Level& level = rootObject.elements[levelName];
-        if (level.elements.find(elementType) == level.elements.end())
-        {
-            ElementTypeCollection collection{};
-            collection.name = elementType;
-            level.elements[elementType] = collection;
-        }
-
-        ElementTypeCollection& elementTypeCollection = level.elements[elementType];
-        elementTypeCollection.elements.push_back(modelElement);
 
         conversionResults.push_back(conversionResult);
+
+        if (CONNECTOR.GetProcessWindow().IsProcessCanceled())
+        {
+            CONNECTOR.GetProcessWindow().Close();
+            throw UserCancelledException("The user cancelled the send operation");
+        }
     }
 
+    CONNECTOR.GetProcessWindow().Init("Converting render materials", static_cast<int>(elementIds.size()));
     std::map<int, RenderMaterialProxy> collectedProxies;
     for (const auto& body : bodies)
     {
         for (const auto& mesh : body.meshes)
         {
-            int materialIndex = mesh.second.materialIndex;
+            int materialIndex = mesh.materialIndex;
             if (collectedProxies.find(materialIndex) == collectedProxies.end())
             {
                 RenderMaterialProxy renderMaterialProxy;
@@ -70,13 +103,24 @@ RootObject RootObjectBuilder::GetRootObject(const std::vector<std::string>& elem
                 collectedProxies[materialIndex] = renderMaterialProxy;
             }
 
-            collectedProxies[materialIndex].objects.push_back(mesh.second.applicationId);
+            collectedProxies[materialIndex].objects.push_back(mesh.applicationId);
+        }
+
+        if (CONNECTOR.GetProcessWindow().IsProcessCanceled())
+        {
+            CONNECTOR.GetProcessWindow().Close();
+            throw std::exception("The user cancelled the operation");
         }
     }
 
     for (const auto& renderMaterialProxy : collectedProxies)
     {
         rootObject.renderMaterialProxies.push_back(renderMaterialProxy.second);
+    }
+
+    for (const auto& levelProxy : levelProxies)
+    {
+        rootObject.levelProxies.push_back(levelProxy.second);
     }
 
     auto projectInfo = CONNECTOR.GetHostToSpeckleConverter().GetProjectInfo();

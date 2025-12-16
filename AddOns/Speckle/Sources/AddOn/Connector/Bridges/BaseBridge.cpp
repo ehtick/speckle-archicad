@@ -13,34 +13,9 @@ BaseBridge::BaseBridge(IBrowserAdapter* browser)
             "GetSourceApplicationName", "GetSourceApplicationVersion", "HighlightModel",
             "HighlightObjects", "OpenUrl", "RemoveModel", "UpdateModel"
     },
-        browser
+        browser,
+        this
     );
-
-    baseBinding->RunMethodRequested += [this](const RunMethodEventArgs& args) { OnRunMethod(args); };
-}
-
-// POC duplicated code, move try catch logic to Binding
-void BaseBridge::OnRunMethod(const RunMethodEventArgs& args)
-{
-    try
-    {
-        RunMethod(args);
-    }
-    catch (const ArchiCadApiException& acex)
-    {
-        baseBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured in the ArchiCAD API" , acex.what(), false });
-    }
-    catch (const std::exception& stdex)
-    {
-        baseBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured" , stdex.what(), false });
-    }
-    catch (...)
-    {
-        baseBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Unknown exception occured" , "", false });
-    }
 }
 
 void BaseBridge::RunMethod(const RunMethodEventArgs& args) 
@@ -100,15 +75,17 @@ void BaseBridge::AddModel(const RunMethodEventArgs& args)
     if (args.data.size() < 1)
         throw std::invalid_argument("Too few of arguments when calling " + args.methodName);
 
-    SendModelCard modelCard = args.data[0].get<SendModelCard>();
+    ModelCard modelCard = args.data[0].get<ModelCard>();
     CONNECTOR.GetModelCardDatabase().AddModel(modelCard);
     args.eventSource->ResponseReady(args.methodId);
 }
 
 void BaseBridge::GetConnectorVersion(const RunMethodEventArgs& args) 
 {
-    // TODO what should this number be?
-    args.eventSource->SetResult(args.methodId, "3.0.0");
+    // TODO move this id to ResourceIds.hpp
+    short versionStringResourceId = 5010;
+    auto versionInfo = CONNECTOR.GetHostToSpeckleConverter().GetResourceString(versionStringResourceId);
+    args.eventSource->SetResult(args.methodId, versionInfo);
 }
 
 void BaseBridge::GetDocumentInfo(const RunMethodEventArgs& args) 
@@ -116,7 +93,7 @@ void BaseBridge::GetDocumentInfo(const RunMethodEventArgs& args)
     try
     {
         auto documentInfo = CONNECTOR.GetHostToSpeckleConverter().GetProjectInfo();
-        documentInfo.id = CONNECTOR.GetDataStorage().GetDataStorageId(Connector::MODELCARD_ADDONOBJECT_NAME);
+        documentInfo.id = "9FB91C96-3D34-4A2F-81CF-206FFE2FD185";
         args.eventSource->SetResult(args.methodId, documentInfo);
     }
     catch (const ArchiCadApiException& acex)
@@ -141,7 +118,7 @@ void BaseBridge::GetDocumentState(const RunMethodEventArgs& args)
 
 void BaseBridge::GetSourceApplicationName(const RunMethodEventArgs& args) 
 {
-    args.eventSource->SetResult(args.methodId, "ArchiCAD");
+    args.eventSource->SetResult(args.methodId, "archicad");
 }
 
 void BaseBridge::GetSourceApplicationVersion(const RunMethodEventArgs& args) 
@@ -156,9 +133,22 @@ void BaseBridge::HighlightModel(const RunMethodEventArgs& args)
         throw std::invalid_argument("Too few of arguments when calling " + args.methodName);
 
     auto id = args.data[0].get<std::string>();
-    SendModelCard modelCard = CONNECTOR.GetModelCardDatabase().GetModelCard(id);
-    auto selection = modelCard.sendFilter.selectedObjectIds;
-    CONNECTOR.GetSpeckleToHostConverter().SetSelection(selection);
+    ModelCard modelCard = CONNECTOR.GetModelCardDatabase().GetModelCard(id);
+
+    if (modelCard.IsSenderModelCard())
+    {
+        auto selection = modelCard.AsSenderModelCard().sendFilter.GetSelectedObjectIds();
+        CONNECTOR.GetSpeckleToHostConverter().SetSelection(selection);
+    }
+    else if(modelCard.IsReceiverModelCard())
+    {
+        auto selection = modelCard.AsReceiverModelCard().bakedObjectIds;
+        CONNECTOR.GetSpeckleToHostConverter().SetSelection(selection);
+    }
+    else
+    {
+        // throw?
+    }
 }
 
 void BaseBridge::HighlightObjects(const RunMethodEventArgs& args) 
@@ -185,7 +175,7 @@ void BaseBridge::RemoveModel(const RunMethodEventArgs& args)
     if (args.data.size() < 1)
         throw std::invalid_argument("Too few of arguments when calling " + args.methodName);
 
-    SendModelCard modelCard = args.data[0].get<SendModelCard>();
+    ModelCard modelCard = args.data[0].get<ModelCard>();
     CONNECTOR.GetModelCardDatabase().RemoveModel(modelCard.modelCardId);
     args.eventSource->ResponseReady(args.methodId);
 }
@@ -195,7 +185,7 @@ void BaseBridge::UpdateModel(const RunMethodEventArgs& args)
     if (args.data.size() < 1)
         throw std::invalid_argument("Too few of arguments when calling " + args.methodName);
 
-    SendModelCard modelCard = args.data[0].get<SendModelCard>();
+    ModelCard modelCard = args.data[0].get<ModelCard>();
     CONNECTOR.GetModelCardDatabase().AddModel(modelCard);
     args.eventSource->ResponseReady(args.methodId);
 }

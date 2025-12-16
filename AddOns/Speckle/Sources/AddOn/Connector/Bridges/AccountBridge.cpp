@@ -8,34 +8,10 @@ AccountBridge::AccountBridge(IBrowserAdapter* browser)
 {
 	accountsBinding = std::make_unique<Binding>(
 		"accountsBinding",
-		std::vector<std::string>{ "GetAccounts" },
-		browser);
-
-	accountsBinding->RunMethodRequested += [this](const RunMethodEventArgs& args) { OnRunMethod(args); };
-}
-
-// POC duplicated code, move try catch logic to Binding
-void AccountBridge::OnRunMethod(const RunMethodEventArgs& args)
-{
-    try
-    {
-        RunMethod(args);
-    }
-    catch (const ArchiCadApiException& acex)
-    {
-        accountsBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured in the ArchiCAD API" , acex.what(), false });
-    }
-    catch (const std::exception& stdex)
-    {
-        accountsBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Exception occured" , stdex.what(), false });
-    }
-    catch (...)
-    {
-        accountsBinding->SetToastNotification(
-            ToastNotification{ ToastNotificationType::DANGER , "Unknown exception occured" , "", false });
-    }
+		std::vector<std::string>{ "GetAccounts", "removeAccount" },
+		browser,
+        this
+    );
 }
 
 void AccountBridge::RunMethod(const RunMethodEventArgs& args)
@@ -44,6 +20,10 @@ void AccountBridge::RunMethod(const RunMethodEventArgs& args)
 	{
 		GetAccounts(args);
 	}
+    else if (args.methodName == "removeAccount")
+    {
+        RemoveAccount(args);
+    }
 	else
 	{
 		throw InvalidMethodNameException(args.methodName);
@@ -52,6 +32,18 @@ void AccountBridge::RunMethod(const RunMethodEventArgs& args)
 
 void AccountBridge::GetAccounts(const RunMethodEventArgs& args)
 {
+    CONNECTOR.GetAccountDatabase().RefreshFromDB();
 	auto accounts = CONNECTOR.GetAccountDatabase().GetAccounts();
 	args.eventSource->SetResult(args.methodId, accounts);
+}
+
+void AccountBridge::RemoveAccount(const RunMethodEventArgs& args)
+{
+    if (args.data.size() < 1)
+        throw std::invalid_argument("Too few arguments when calling " + args.methodName);
+
+    std::string accountId = args.data[0].get<std::string>();
+    CONNECTOR.GetAccountDatabase().RemoveAccountById(accountId);
+
+    args.eventSource->ResponseReady(args.methodId);
 }

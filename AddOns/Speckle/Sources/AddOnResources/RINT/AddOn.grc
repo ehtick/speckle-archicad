@@ -1,4 +1,8 @@
-﻿/* Add-On Information */
+/* Add-On Information */
+
+'STR#' 5010 "connector version"{
+/* [  1] */	"connector_build_num"
+} 
 
 'STR#' 32000 "Information" {
 /* [  1] */	"Speckle ArchiCAD Connector"
@@ -9,12 +13,12 @@
 
 'STR#' 32500 "Menu strings" {
 /* [   ] */	"Speckle"
-/* [  1] */	"Initialize Speckle (Beta)^E3^ED^EW^ES^EE^EI^EL^ET^EM^R"
+/* [  1] */	"Speckle^E3^ED^EW^ES^EE^EI^EL^ET^EM^R"
 }
 
 /* --- Dockable browser palette ----------------------------------------------*/
 
-'GDLG'  32500    Palette | topCaption | close | grow   0   0  250  350  "Speckle Connector"  {
+'GDLG'  32500    Palette | topCaption | close | grow   0   0  250  350  "Speckle"  {
 /* [  1] */ Browser			0   0  250  350
 }
 

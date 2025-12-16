@@ -4,49 +4,28 @@
 #include "ACAPinc.h"
 #include "CheckError.h"
 
-static GSErrCode DeselectAll()
+static bool ElementExists(const API_Guid& guid)
 {
-	GSErrCode err = NoError;
+	API_Element element;
+	BNZeroMemory(&element, sizeof(API_Element));
+	element.header.guid = guid;
 
-#if defined(AC28)
-	err = ACAPI_Selection_DeselectAll();
-#elif defined(AC27)
-	err = ACAPI_Selection_DeselectAll();
-#elif defined(AC26)
-	err = ACAPI_Element_DeselectAll();
-#elif defined(AC25)
-	err = ACAPI_Element_DeselectAll();
-#endif
-
-	return err;
-}
-
-static GSErrCode Select(const GS::Array<API_Neig>& selNeigs, bool add)
-{
-	GSErrCode err = NoError;
-
-#if defined(AC28)
-	err = ACAPI_Selection_Select(selNeigs, add);
-#elif defined(AC27)
-	err = ACAPI_Selection_Select(selNeigs, add);
-#elif defined(AC26)
-	err = ACAPI_Element_Select(selNeigs, add);
-#elif defined(AC25)
-	err = ACAPI_Element_Select(selNeigs, add);
-#endif
-
-	return err;
+	GSErrCode err = ACAPI_Element_Get(&element);
+	return (err == NoError);
 }
 
 void SpeckleToHostConverter::SetSelection(std::vector<std::string> guids)
 {
-	CHECK_ERROR(DeselectAll());
+	CHECK_ERROR(ACAPI_Selection_DeselectAll());
 	GS::Array<API_Neig> selNeigs;
 	for (const auto& id : guids)
 	{
 		auto guid = APIGuidFromString(id.c_str());
-		API_Neig neig(guid);
-		selNeigs.Push(neig);
+		if (ElementExists(guid))
+		{
+			API_Neig neig(guid);
+			selNeigs.Push(neig);
+		}
 	}
-	CHECK_ERROR(Select(selNeigs, true));
+	CHECK_ERROR(ACAPI_Selection_Select(selNeigs, true));
 }
